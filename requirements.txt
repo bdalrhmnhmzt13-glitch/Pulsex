@@ -1,0 +1,3 @@
+تثبيت المتطلبات:
+
+pip install -r requirements.txt
