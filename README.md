@@ -1,472 +1,242 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOP-للشحن الإلكتروني</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/1.28.0/iconfont/lucide.css" rel="stylesheet">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
-        body {
-            font-family: 'Tajawal', sans-serif;
-        }
-        .gradient-bg {
-            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
-        }
-        .product-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .product-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-        .cart-sidebar {
-            transition: transform 0.3s ease;
-        }
-        .star-rating {
-            color: #fbbf24;
-        }
-    </style>
-</head>
-<body class="bg-gray-50">
-    <div id="root"></div>
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+from flask import Flask, jsonify
+import random
+import os
+from datetime import datetime
+import threading
+import time
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+# === إعدادات البوت ===
+TOKEN = "8446070901:AAEEl7gFxqyA_cExC5yGXzygAcZMdjIipmI"
+CHANNEL_USERNAME = "@Flix1211"
 
-        // بيانات المنتجات
-        const productsData = [
-            {
-                id: 1,
-                name: "بطاقة جوجل بلاي 10$",
-                category: "تطبيقات",
-                price: 10,
-                rating: 4.5,
-                description: "بطاقة شحن لجوجل بلاي بقيمة 10 دولار"
-            },
-            {
-                id: 2,
-                name: "بطاقة آيتونز 25$",
-                category: "تطبيقات",
-                price: 25,
-                rating: 4.3,
-                description: "بطاقة شحن لآيتونز بقيمة 25 دولار"
-            },
-            {
-                id: 3,
-                name: "اشتراك نتفليكس 3 أشهر",
-                category: "تطبيقات",
-                price: 30,
-                rating: 4.7,
-                description: "اشتراك نتفليكس لمدة 3 أشهر"
-            },
-            {
-                id: 4,
-                name: "اشتراك سبوتيفاي 6 أشهر",
-                category: "تطبيقات",
-                price: 35,
-                rating: 4.4,
-                description: "اشتراك سبوتيفاي لمدة 6 أشهر"
-            },
-            {
-                id: 5,
-                name: "شدات ببجي 600 UC",
-                category: "ألعاب",
-                price: 12,
-                rating: 4.8,
-                description: "600 وحدة غير معروفة (UC) للعبة ببجي"
-            },
-            {
-                id: 6,
-                name: "عملات فري فاير 1000",
-                category: "ألعاب",
-                price: 8,
-                rating: 4.2,
-                description: "1000 عملة للعبة فري فاير"
-            },
-            {
-                id: 7,
-                name: "نقاط كول أوف ديوتي 2400",
-                category: "ألعاب",
-                price: 20,
-                rating: 4.6,
-                description: "2400 نقطة للعبة كول أوف ديوتي"
-            },
-            {
-                id: 8,
-                name: "بيتكوين 0.001 BTC",
-                category: "عملات رقمية",
-                price: 40,
-                rating: 4.9,
-                description: "0.001 بيتكوين للاستثمار والتداول"
-            },
-            {
-                id: 9,
-                name: "إيثيريوم 0.05 ETH",
-                category: "عملات رقمية",
-                price: 50,
-                rating: 4.7,
-                description: "0.05 إيثيريوم للاستثمار والتداول"
-            }
-        ];
+# === تخزين البيانات ===
+bot_data = {
+    "bot_name": "البوت الإسلامي المتقدم",
+    "channel": CHANNEL_USERNAME,
+    "last_message": "لم يتم إرسال رسائل بعد",
+    "last_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    "total_messages": 0,
+    "status": "🟢 يعمل - يرسل كل 10 دقائق",
+    "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    "messages_history": [],
+    "message_types": {
+        "آيات": 0,
+        "أحاديث": 0,
+        "أذكار": 0
+    }
+}
 
-        // مكون تصنيف النجوم
-        const StarRating = ({ rating }) => {
-            const fullStars = Math.floor(rating);
-            const hasHalfStar = rating % 1 >= 0.5;
+# === قاعدة البيانات الإسلامية ===
+islamic_content = {
+    "آيات": [
+        "📖 {قُلْ هُوَ اللَّهُ أَحَدٌ، اللَّهُ الصَّمَدُ، لَمْ يَلِدْ وَلَمْ يُولَدْ، وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ} - سورة الإخلاص",
+        "📖 {رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ} - سورة البقرة",
+        "📖 {إِنَّ مَعَ الْعُسْرِ يُسْرًا، إِنَّ مَعَ الْعُسْرِ يُسْرًا} - سورة الشرح",
+        "📖 {وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ أُجِيبُ دَعْوَةَ الدَّاعِ إِذَا دَعَانِ} - سورة البقرة",
+        "📖 {يَا أَيُّهَا الَّذِينَ آمَنُوا اصْبِرُوا وَصَابِرُوا وَرَابِطُوا وَاتَّقُوا اللَّهَ لَعَلَّكُمْ تُفْلِحُونَ} - سورة آل عمران",
+        "📖 {وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا وَيَرْزُقْهُ مِنْ حَيْثُ لَا يَحْتَسِبُ} - سورة الطلاق",
+        "📖 {إِنَّ اللَّهَ مَعَ الصَّابِرِينَ} - سورة البقرة",
+        "📖 {وَلَا تَيْأَسُوا مِن رَّوْحِ اللَّهِ إِنَّهُ لَا يَيْأَسُ مِن رَّوْحِ اللَّهِ إِلَّا الْقَوْمُ الْكَافِرُونَ} - سورة يوسف",
+        "📖 {وَعَسَى أَن تَكْرَهُوا شَيْئًا وَهُوَ خَيْرٌ لَّكُمْ وَعَسَى أَن تُحِبُّوا شَيْئًا وَهُوَ شَرٌّ لَّكُمْ} - سورة البقرة",
+        "📖 {وَذَكِّرْ فَإِنَّ الذِّكْرَى تَنفَعُ الْمُؤْمِنِينَ} - سورة الذاريات"
+    ],
+    
+    "أحاديث": [
+        "🌙 قال رسول الله ﷺ: 'تبسمك في وجه أخيك صدقة'",
+        "🌙 قال رسول الله ﷺ: 'الكلمة الطيبة صدقة'",
+        "🌙 قال رسول الله ﷺ: 'اتق الله حيثما كنت، وأتبع السيئة الحسنة تمحها، وخالق الناس بخلق حسن'",
+        "🌙 قال رسول الله ﷺ: 'من كان يؤمن بالله واليوم الآخر فليقل خيراً أو ليصمت'",
+        "🌙 قال رسول الله ﷺ: 'لا يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه'",
+        "🌙 قال رسول الله ﷺ: 'إن الله لا ينظر إلى صوركم وأموالكم، ولكن ينظر إلى قلوبكم وأعمالكم'",
+        "🌙 قال رسول الله ﷺ: 'الراحمون يرحمهم الرحمن، ارحموا من في الأرض يرحمكم من في السماء'",
+        "🌙 قال رسول الله ﷺ: 'طلب العلم فريضة على كل مسلم'",
+        "🌙 قال رسول الله ﷺ: 'إنما الأعمال بالنيات، وإنما لكل امرئ ما نوى'",
+        "🌙 قال رسول الله ﷺ: 'الدين النصيحة'"
+    ],
+    
+    "أذكار": [
+        "💫 سبحان الله، والحمد لله، ولا إله إلا الله، والله أكبر",
+        "💫 أستغفر الله العظيم الذي لا إله إلا هو الحي القيوم وأتوب إليه",
+        "💫 لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير",
+        "💫 حسبي الله لا إله إلا هو عليه توكلت وهو رب العرش العظيم",
+        "💫 بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم",
+        "💫 أعوذ بكلمات الله التامات من شر ما خلق",
+        "💫 اللهم إني أسألك علماً نافعاً، ورزقاً طيباً، وعملاً متقبلاً",
+        "💫 اللهم أنت ربي لا إله إلا أنت، خلقتني وأنا عبدك، وأنا على عهدك ووعدك ما استطعت",
+        "💫 سبحان الله وبحمده، سبحان الله العظيم",
+        "💫 لا حول ولا قوة إلا بالله العلي العظيم"
+    ]
+}
+
+# === تطبيق ويب للعرض ===
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return """
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>البوت الإسلامي المتقدم</title>
+        <style>
+            body { font-family: Arial; background: #f0f8ff; padding: 40px; text-align: center; }
+            .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+            h1 { color: #2c5aa0; }
+            .stats { background: #e3f2fd; padding: 20px; border-radius: 10px; margin: 20px 0; }
+            .message { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 8px; border-right: 4px solid #2c5aa0; }
+            .types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }
+            .type-card { background: #e8f5e8; padding: 15px; border-radius: 10px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🕌 البوت الإسلامي المتقدم</h1>
+            <p>يعمل على السحابة - يرسل كل 10 دقائق ⏰</p>
             
-            return (
-                <div className="flex items-center">
-                    {[...Array(5)].map((_, i) => (
-                        <span key={i} className="star-rating">
-                            {i < fullStars ? 
-                                <i data-lucide="star" className="w-4 h-4 fill-current"></i> : 
-                                i === fullStars && hasHalfStar ? 
-                                <i data-lucide="star-half" className="w-4 h-4 fill-current"></i> : 
-                                <i data-lucide="star" className="w-4 h-4"></i>
-                            }
-                        </span>
-                    ))}
-                    <span className="mr-2 text-sm text-gray-600">({rating})</span>
-                </div>
-            );
-        };
+            <div class="stats">
+                <h3>📊 الإحصائيات</h3>
+                <p><strong>القناة:</strong> """ + bot_data["channel"] + """</p>
+                <p><strong>عدد الرسائل:</strong> """ + str(bot_data["total_messages"]) + """</p>
+                <p><strong>آخر رسالة:</strong> """ + bot_data["last_message"] + """</p>
+                <p><strong>الوقت:</strong> """ + bot_data["last_time"] + """</p>
+                <p><strong>الحالة:</strong> """ + bot_data["status"] + """</p>
+            </div>
 
-        // مكون بطاقة المنتج
-        const ProductCard = ({ product, onAddToCart }) => {
-            return (
-                <div className="product-card bg-white rounded-xl shadow-md overflow-hidden">
-                    <div className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <h3 className="text-lg font-bold text-gray-800">{product.name}</h3>
-                            <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                {product.category}
-                            </span>
-                        </div>
-                        <p className="text-gray-600 text-sm mb-4">{product.description}</p>
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <StarRating rating={product.rating} />
-                                <p className="text-xl font-bold text-purple-600 mt-2">${product.price}</p>
-                            </div>
-                            <button 
-                                onClick={() => onAddToCart(product)}
-                                className="gradient-bg text-white px-4 py-2 rounded-lg flex items-center hover:opacity-90 transition-opacity"
-                            >
-                                <i data-lucide="shopping-cart" className="w-4 h-4 ml-1"></i>
-                                أضف للسلة
-                            </button>
-                        </div>
-                    </div>
+            <div class="types">
+                <div class="type-card">
+                    <h4>📖 الآيات</h4>
+                    <p>""" + str(bot_data["message_types"]["آيات"]) + """ رسالة</p>
                 </div>
-            );
-        };
-
-        // مكون السلة الجانبية
-        const CartSidebar = ({ isOpen, cartItems, onClose, onRemoveFromCart, onCheckout }) => {
-            const totalPrice = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                <div class="type-card">
+                    <h4>🌙 الأحاديث</h4>
+                    <p>""" + str(bot_data["message_types"]["أحاديث"]) + """ رسالة</p>
+                </div>
+                <div class="type-card">
+                    <h4>💫 الأذكار</h4>
+                    <p>""" + str(bot_data["message_types"]["أذكار"]) + """ رسالة</p>
+                </div>
+            </div>
             
-            return (
-                <div className={`fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-xl cart-sidebar ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                    <div className="p-6 h-full flex flex-col">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-800">سلة التسوق</h2>
-                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-                                <i data-lucide="x" className="w-6 h-6"></i>
-                            </button>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto">
-                            {cartItems.length === 0 ? (
-                                <div className="text-center py-10">
-                                    <i data-lucide="shopping-cart" className="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
-                                    <p className="text-gray-500">سلة التسوق فارغة</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {cartItems.map(item => (
-                                        <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                                            <div>
-                                                <h4 className="font-medium text-gray-800">{item.name}</h4>
-                                                <p className="text-sm text-gray-600">${item.price} × {item.quantity}</p>
-                                            </div>
-                                            <div className="flex items-center">
-                                                <span className="font-bold text-purple-600 ml-2">${item.price * item.quantity}</span>
-                                                <button 
-                                                    onClick={() => onRemoveFromCart(item.id)}
-                                                    className="text-red-500 hover:text-red-700 p-1"
-                                                >
-                                                    <i data-lucide="trash-2" className="w-4 h-4"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        
-                        {cartItems.length > 0 && (
-                            <div className="border-t border-gray-200 pt-4 mt-4">
-                                <div className="flex justify-between items-center mb-4">
-                                    <span className="text-lg font-bold text-gray-800">المجموع:</span>
-                                    <span className="text-xl font-bold text-purple-600">${totalPrice.toFixed(2)}</span>
-                                </div>
-                                <button 
-                                    onClick={onCheckout}
-                                    className="w-full gradient-bg text-white py-3 rounded-lg font-bold flex justify-center items-center hover:opacity-90 transition-opacity"
-                                >
-                                    <i data-lucide="message-circle" className="w-5 h-5 ml-2"></i>
-                                    إتمام الطلب عبر واتساب
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
+            <div class="message">
+                <h3>📨 آخر الرسائل</h3>
+                <p>""" + bot_data["last_message"] + """</p>
+                <small>""" + bot_data["last_time"] + """</small>
+            </div>
+            
+            <p>⏰ البوت يرسل رسائل تلقائية كل 10 دقائق إلى القناة</p>
+            <p>🎯 يتناوب بين الآيات القرآنية، الأحاديث النبوية، والأذكار اليومية</p>
+        </div>
+    </body>
+    </html>
+    """
 
-        // المكون الرئيسي للتطبيق
-        const App = () => {
-            const [products, setProducts] = useState(productsData);
-            const [cartItems, setCartItems] = useState([]);
-            const [isCartOpen, setIsCartOpen] = useState(false);
-            const [selectedCategory, setSelectedCategory] = useState("الكل");
-            const [searchQuery, setSearchQuery] = useState("");
+@app.route('/api/data')
+def api_data():
+    return jsonify(bot_data)
 
-            // تصفية المنتجات حسب الفئة والبحث
-            useEffect(() => {
-                let filteredProducts = productsData;
-                
-                if (selectedCategory !== "الكل") {
-                    filteredProducts = filteredProducts.filter(product => product.category === selectedCategory);
-                }
-                
-                if (searchQuery) {
-                    filteredProducts = filteredProducts.filter(product => 
-                        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        product.description.toLowerCase().includes(searchQuery.toLowerCase())
-                    );
-                }
-                
-                setProducts(filteredProducts);
-            }, [selectedCategory, searchQuery]);
+@app.route('/api/health')
+def health_check():
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
-            // إضافة منتج إلى السلة
-            const addToCart = (product) => {
-                setCartItems(prevItems => {
-                    const existingItem = prevItems.find(item => item.id === product.id);
-                    
-                    if (existingItem) {
-                        return prevItems.map(item => 
-                            item.id === product.id 
-                                ? { ...item, quantity: item.quantity + 1 } 
-                                : item
-                        );
-                    } else {
-                        return [...prevItems, { ...product, quantity: 1 }];
-                    }
-                });
-            };
+def update_bot_data(message, message_type):
+    """تحديث بيانات البوت"""
+    bot_data["last_message"] = message
+    bot_data["last_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    bot_data["total_messages"] += 1
+    bot_data["message_types"][message_type] += 1
+    
+    bot_data["messages_history"].append({
+        "message": message,
+        "time": bot_data["last_time"],
+        "type": message_type
+    })
+    
+    if len(bot_data["messages_history"]) > 20:
+        bot_data["messages_history"].pop(0)
 
-            // إزالة منتج من السلة
-            const removeFromCart = (productId) => {
-                setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
-            };
-
-            // إرسال الطلب عبر واتساب
-            const handleWhatsAppOrder = () => {
-                if (cartItems.length === 0) return;
-                
-                const totalPrice = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-                let message = `مرحباً، أريد طلب المنتجات التالية من متجر TOP-للشحن:\n\n`;
-                
-                cartItems.forEach(item => {
-                    message += `- ${item.name} (${item.quantity}) - $${item.price * item.quantity}\n`;
-                });
-                
-                message += `\nالمجموع الكلي: $${totalPrice.toFixed(2)}\n\nشكراً!`;
-                
-                const encodedMessage = encodeURIComponent(message);
-                const phoneNumber = "963964659342";
-                const whatsappURL = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
-                
-                window.open(whatsappURL, '_blank');
-            };
-
-            // الفئات المتاحة
-            const categories = ["الكل", "تطبيقات", "ألعاب", "عملات رقمية"];
-
-            return (
-                <div className="min-h-screen flex flex-col">
-                    {/* الرأس */}
-                    <header className="gradient-bg text-white shadow-lg">
-                        <div className="container mx-auto px-4 py-4">
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center">
-                                    <i data-lucide="zap" className="w-8 h-8 text-yellow-300"></i>
-                                    <h1 className="text-2xl font-bold mr-2">TOP-للشحن</h1>
-                                </div>
-                                <button 
-                                    onClick={() => setIsCartOpen(true)}
-                                    className="relative bg-white/20 p-2 rounded-lg hover:bg-white/30 transition-colors"
-                                >
-                                    <i data-lucide="shopping-cart" className="w-6 h-6"></i>
-                                    {cartItems.length > 0 && (
-                                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                            {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
-                                        </span>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </header>
-
-                    {/* القسم الترويجي */}
-                    <section className="gradient-bg text-white py-16">
-                        <div className="container mx-auto px-4 text-center">
-                            <h2 className="text-4xl font-bold mb-4">متجرك الموثوق للمنتجات الرقمية</h2>
-                            <p className="text-xl mb-8 opacity-90">تطبيقات، ألعاب، وعملات رقمية بشحن فوري</p>
-                            
-                            <div className="max-w-md mx-auto">
-                                <div className="relative">
-                                    <input 
-                                        type="text" 
-                                        placeholder="ابحث عن المنتجات..." 
-                                        className="w-full py-3 px-4 pr-12 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
-                                    <i data-lucide="search" className="w-5 h-5 text-gray-400 absolute left-4 top-3.5"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* الفئات */}
-                    <section className="bg-white py-8 border-b border-gray-200">
-                        <div className="container mx-auto px-4">
-                            <div className="flex flex-wrap justify-center gap-4">
-                                {categories.map(category => (
-                                    <button
-                                        key={category}
-                                        onClick={() => setSelectedCategory(category)}
-                                        className={`px-6 py-2 rounded-full font-medium transition-colors ${
-                                            selectedCategory === category 
-                                            ? 'gradient-bg text-white' 
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                        }`}
-                                    >
-                                        {category}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* المنتجات */}
-                    <main className="flex-1 container mx-auto px-4 py-12">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-8 text-center">منتجاتنا</h2>
-                        
-                        {products.length === 0 ? (
-                            <div className="text-center py-10">
-                                <i data-lucide="package" className="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
-                                <p className="text-gray-500">لا توجد منتجات مطابقة لبحثك</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {products.map(product => (
-                                    <ProductCard 
-                                        key={product.id} 
-                                        product={product} 
-                                        onAddToCart={addToCart}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </main>
-
-                    {/* التذييل */}
-                    <footer className="bg-gray-800 text-white py-12">
-                        <div className="container mx-auto px-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div>
-                                    <div className="flex items-center mb-4">
-                                        <i data-lucide="zap" className="w-6 h-6 text-yellow-300"></i>
-                                        <h3 className="text-xl font-bold mr-2">TOP-للشحن</h3>
-                                    </div>
-                                    <p className="text-gray-300">متجرك الموثوق للمنتجات الرقمية. تطبيقات، ألعاب، وعملات رقمية بشحن فوري.</p>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="text-lg font-bold mb-4">الفئات</h4>
-                                    <ul className="space-y-2">
-                                        <li><a href="#" className="text-gray-300 hover:text-white transition-colors">التطبيقات</a></li>
-                                        <li><a href="#" className="text-gray-300 hover:text-white transition-colors">الألعاب</a></li>
-                                        <li><a href="#" className="text-gray-300 hover:text-white transition-colors">العملات الرقمية</a></li>
-                                    </ul>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="text-lg font-bold mb-4">اتصل بنا</h4>
-                                    <div className="flex items-center mb-2">
-                                        <i data-lucide="message-circle" className="w-5 h-5 text-green-400 ml-2"></i>
-                                        <span className="text-gray-300">واتساب: 963964659342</span>
-                                    </div>
-                                    <p className="text-gray-300">الشحن فوري بعد تأكيد الدفع</p>
-                                </div>
-                            </div>
-                            
-                            <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                                <p>© 2025 TOP-للشحن. جميع الحقوق محفوظة.</p>
-                            </div>
-                        </div>
-                    </footer>
-
-                    {/* السلة الجانبية */}
-                    <CartSidebar 
-                        isOpen={isCartOpen}
-                        cartItems={cartItems}
-                        onClose={() => setIsCartOpen(false)}
-                        onRemoveFromCart={removeFromCart}
-                        onCheckout={handleWhatsAppOrder}
-                    />
-                    
-                    {/* زر فتح السلة على الهواتف */}
-                    {!isCartOpen && cartItems.length > 0 && (
-                        <button 
-                            onClick={() => setIsCartOpen(true)}
-                            className="fixed bottom-6 left-6 gradient-bg text-white p-4 rounded-full shadow-lg hover:opacity-90 transition-opacity md:hidden"
-                        >
-                            <i data-lucide="shopping-cart" className="w-6 h-6"></i>
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
-                            </span>
-                        </button>
-                    )}
-                </div>
-            );
-        };
-
-        // تهيئة الأيقونات بعد التصيير
-        const initLucideIcons = () => {
-            if (window.lucide) {
-                window.lucide.createIcons();
-            }
-        };
-
-        // تصيير التطبيق
-        ReactDOM.render(<App />, document.getElementById('root'));
+# === دوال بوت التلجرام ===
+async def send_islamic_content(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        # تناوب بين أنواع المحتوى
+        message_types = list(islamic_content.keys())
+        current_type = message_types[bot_data["total_messages"] % len(message_types)]
         
-        // تهيئة الأيقونات بعد تحميل الصفحة
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initLucideIcons);
-        } else {
-            initLucideIcons();
-        }
-    </script>
-</body>
-</html>
+        # اختيار رسالة عشوائية من النوع المحدد
+        message = random.choice(islamic_content[current_type])
+        
+        await context.bot.send_message(
+            chat_id=CHANNEL_USERNAME,
+            text=message,
+            parse_mode='Markdown'
+        )
+        
+        update_bot_data(message, current_type)
+        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] تم إرسال {current_type}: {message[:50]}...")
+        
+    except Exception as e:
+        print(f"❌ [{datetime.now().strftime('%H:%M:%S')}] خطأ: {e}")
+        bot_data["status"] = f"🔴 خطأ: {str(e)}"
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        f"🕌 البوت الإسلامي المتقدم\n\n"
+        f"📊 الإحصائيات:\n"
+        f"• القناة: {CHANNEL_USERNAME}\n"
+        f"• الرسائل المرسلة: {bot_data['total_messages']}\n"
+        f"• آخر رسالة: {bot_data['last_time']}\n"
+        f"• يعمل منذ: {bot_data['start_time']}\n\n"
+        f"🎯 يرسل كل 10 دقائق:\n"
+        f"• 📖 آيات قرآنية\n"
+        f"• 🌙 أحاديث نبوية\n"
+        f"• 💫 أذكار يومية\n\n"
+        f"⚡ يعمل تلقائياً 24/7"
+    )
+
+def run_flask_app():
+    """تشغيل تطبيق Flask"""
+    port = int(os.environ.get('PORT', 5000))
+    print(f"🌐 بدء خادم Flask على المنفذ {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+def run_bot():
+    """تشغيل بوت التلجرام"""
+    try:
+        application = Application.builder().token(TOKEN).build()
+        application.add_handler(CommandHandler("start", start_command))
+        
+        job_queue = application.job_queue
+        if job_queue:
+            # إرسال رسالة كل 10 دقائق (600 ثانية)
+            job_queue.run_repeating(send_islamic_content, interval=600, first=10)
+            print("✅ تم تفعيل الجدولة التلقائية - رسائل كل 10 دقائق")
+        
+        print("🤖 بوت التلجرام يعمل...")
+        print("⏰ يرسل كل 10 دقائق: آيات، أحاديث، أذكار")
+        application.run_polling()
+        
+    except Exception as e:
+        print(f"❌ خطأ في تشغيل البوت: {e}")
+        bot_data["status"] = f"🔴 خطأ: {str(e)}"
+
+if __name__ == "__main__":
+    print("🚀 بدء التشغيل الكامل للبوت الإسلامي المتقدم...")
+    print("🎯 الميزات الجديدة:")
+    print("   • ⏰ إرسال كل 10 دقائق")
+    print("   • 📖 تناوب بين الآيات والأحاديث والأذكار")
+    print("   • 📊 إحصائيات مفصلة")
+    
+    # تحديث حالة البوت
+    bot_data["status"] = "🟢 يعمل - يرسل كل 10 دقائق"
+    
+    # تشغيل Flask في thread منفصل
+    flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+    flask_thread.start()
+    
+    # تشغيل البوت بعد تأخير بسيط
+    time.sleep(5)
+    
+    # تشغيل البوت
+    run_bot()
